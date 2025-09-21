@@ -1,5 +1,5 @@
 streamlit
-opencv-python
+opencv-python-headless==4.8.1.78
 matplotlib
 pillow
-tensorflow   # only if you include training
+tensorflow   # only if you want to include training
