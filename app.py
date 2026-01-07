@@ -1,67 +1,97 @@
+# app.py
 import streamlit as st
-import tensorflow as tf
-from tensorflow.keras import layers, models
+from PIL import Image
 import numpy as np
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
+import cv2
 import os
+from tensorflow.keras.models import load_model
+from fpdf import FPDF
 import gdown
 
-st.set_page_config(page_title="AI Crack Detection", layout="centered")
-st.title("🧠 Concrete Crack Detection")
-st.write("Upload an image to detect cracks using AI.")
+st.set_page_config(page_title="🛠️ Crack Detection", layout="centered")
+st.title("🛠️ Image-based Crack Detection")
+st.markdown("Upload an image to detect cracks, calculate severity, and download a report.")
 
-# -------- MODEL FILE (weights) -------- #
-MODEL_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"   # <-- use your file id ONLY if using Drive
-WEIGHTS_PATH = "crack_weights.weights.h5"
+# -------------------------
+# 1️⃣ Download model from Google Drive
+# -------------------------
+MODEL_URL = "https://drive.google.com/uc?id=YOUR_FILE_ID"  # replace with your file ID
+MODEL_PATH = "model.h5"
 
-# -------- DOWNLOAD WEIGHTS IF NOT FOUND -------- #
-if not os.path.exists(WEIGHTS_PATH):
-    with st.spinner("⬇️ Downloading weights..."):
-        gdown.download(id=MODEL_ID, output=WEIGHTS_PATH, quiet=False)
-        st.success("Weights downloaded!")
+if not os.path.exists(MODEL_PATH):
+    with st.spinner("Downloading model..."):
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
-# -------- REBUILD MODEL ARCHITECTURE -------- #
-@st.cache_resource
-def build_model():
+# Load model
+model = load_model(MODEL_PATH)
 
-    model = models.Sequential([
-        layers.Input(shape=(150,150,3)),
+# -------------------------
+# 2️⃣ Functions
+# -------------------------
+def calculate_crack_severity(image_path):
+    """Calculate crack severity as % of image area covered by cracks."""
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    _, thresh = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+    crack_pixels = np.sum(thresh == 255)
+    total_pixels = thresh.size
+    severity_score = (crack_pixels / total_pixels) * 100
+    return round(severity_score, 2)
 
-        layers.Conv2D(32, (3,3), activation="relu"),
-        layers.MaxPooling2D(2,2),
+def create_pdf_report(image_path, severity_score, report_path="report.pdf"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=16)
+    pdf.cell(200, 10, txt="Crack Detection Report", ln=True, align="C")
+    pdf.ln(10)
+    pdf.cell(200, 10, txt=f"Severity Score: {severity_score}%", ln=True)
+    pdf.ln(10)
+    pdf.image(image_path, x=50, w=100)
+    pdf.output(report_path)
+    return report_path
 
-        layers.Conv2D(64, (3,3), activation="relu"),
-        layers.MaxPooling2D(2,2),
+def predict_crack(image_path):
+    """Use the trained model to predict cracks."""
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((224, 224))  # adjust according to your model input
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    pred = model.predict(img_array)
+    return pred[0][0]  # assuming binary classification
 
-        layers.Conv2D(128, (3,3), activation="relu"),
-        layers.MaxPooling2D(2,2),
-
-        layers.Flatten(),
-        layers.Dense(128, activation="relu"),
-        layers.Dense(1, activation="sigmoid")
-    ])
-
-    model.load_weights(WEIGHTS_PATH)
-    return model
-
-
-model = build_model()
-
-# -------- UPLOAD IMAGE -------- #
-uploaded_file = st.file_uploader("📷 Upload an image", type=["jpg","jpeg","png"])
+# -------------------------
+# 3️⃣ Streamlit UI
+# -------------------------
+uploaded_file = st.file_uploader("Choose an image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
-    img = load_img(uploaded_file, target_size=(150,150))
-    st.image(img, caption="Uploaded Image", use_column_width=True)
-
-    img_array = img_to_array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-
-    pred = model.predict(img_array)[0][0]
-
-    st.write(f"🔍 Confidence: `{pred:.2f}`")
-
-    if pred > 0.5:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+    
+    # Save temp file
+    temp_path = "temp_image.png"
+    image.save(temp_path)
+    
+    # Predict crack
+    with st.spinner("Detecting cracks..."):
+        prediction = predict_crack(temp_path)
+    
+    if prediction >= 0.5:
         st.error("⚠️ Crack Detected")
     else:
         st.success("✅ No Crack Detected")
+    
+    # Severity
+    severity = calculate_crack_severity(temp_path)
+    st.metric(label="Crack Severity Score", value=f"{severity}%")
+    
+    # Download report
+    report_file = create_pdf_report(temp_path, severity)
+    with open(report_file, "rb") as f:
+        st.download_button(
+            label="📄 Download Report",
+            data=f,
+            file_name="Crack_Report.pdf",
+            mime="application/pdf"
+        )
+    
+    st.success("Analysis complete!")
