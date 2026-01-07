@@ -9,21 +9,26 @@ st.set_page_config(page_title="AI Crack Detection App", layout="centered")
 st.title("🧠 Concrete Crack Detection")
 st.write("Upload an image to detect concrete cracks using AI.")
 
+# -------- MODEL DETAILS -------- #
 MODEL_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"
 MODEL_URL = f"https://drive.google.com/uc?export=download&id={MODEL_ID}"
 MODEL_PATH = "crack_model.h5"
 
+
 @st.cache_resource
 def load_crack_model():
 
-    # Download only the first time
+    # download once
     if not os.path.exists(MODEL_PATH):
-        with st.spinner("⬇️ Downloading model from Google Drive..."):
+        with st.spinner("⬇️ Downloading model..."):
             r = requests.get(MODEL_URL, allow_redirects=True)
             open(MODEL_PATH, "wb").write(r.content)
-            st.success("📦 Model downloaded successfully!")
+        st.success("📦 Model downloaded!")
 
-    return tf.keras.models.load_model(MODEL_PATH)
+    # IMPORTANT: compile=False fixes keras version mismatch
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    return model
+
 
 model = load_crack_model()
 
@@ -40,11 +45,11 @@ if uploaded_file is not None:
     img_array = img_to_array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
-    prediction = model.predict(img_array)[0][0]
+    pred = model.predict(img_array)[0][0]
 
-    st.write(f"🔍 Confidence Score: `{prediction:.2f}`")
+    st.write(f"🔍 Confidence Score: `{pred:.2f}`")
 
-    if prediction > 0.5:
+    if pred > 0.5:
         st.error("⚠️ Crack Detected!")
     else:
         st.success("✅ No Crack Detected!")
