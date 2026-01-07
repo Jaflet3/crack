@@ -1,45 +1,57 @@
 import streamlit as st
 import tensorflow as tf
+from tensorflow.keras import layers, models
 import numpy as np
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import os
-import requests
+import gdown
 
-st.set_page_config(page_title="AI Crack Detection App", layout="centered")
+st.set_page_config(page_title="AI Crack Detection", layout="centered")
 st.title("🧠 Concrete Crack Detection")
-st.write("Upload an image to detect concrete cracks using AI.")
+st.write("Upload an image to detect cracks using AI.")
 
-# -------- MODEL DETAILS -------- #
-MODEL_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"
-MODEL_URL = f"https://drive.google.com/uc?export=download&id={MODEL_ID}"
-MODEL_PATH = "crack_model.h5"
+# -------- MODEL FILE (weights) -------- #
+MODEL_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"   # <-- use your file id ONLY if using Drive
+WEIGHTS_PATH = "crack_weights.weights.h5"
 
+# -------- DOWNLOAD WEIGHTS IF NOT FOUND -------- #
+if not os.path.exists(WEIGHTS_PATH):
+    with st.spinner("⬇️ Downloading weights..."):
+        gdown.download(id=MODEL_ID, output=WEIGHTS_PATH, quiet=False)
+        st.success("Weights downloaded!")
 
+# -------- REBUILD MODEL ARCHITECTURE -------- #
 @st.cache_resource
-def load_crack_model():
+def build_model():
 
-    # download once
-    if not os.path.exists(MODEL_PATH):
-        with st.spinner("⬇️ Downloading model..."):
-            r = requests.get(MODEL_URL, allow_redirects=True)
-            open(MODEL_PATH, "wb").write(r.content)
-        st.success("📦 Model downloaded!")
+    model = models.Sequential([
+        layers.Input(shape=(150,150,3)),
 
-    # IMPORTANT: compile=False fixes keras version mismatch
-    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        layers.Conv2D(32, (3,3), activation="relu"),
+        layers.MaxPooling2D(2,2),
+
+        layers.Conv2D(64, (3,3), activation="relu"),
+        layers.MaxPooling2D(2,2),
+
+        layers.Conv2D(128, (3,3), activation="relu"),
+        layers.MaxPooling2D(2,2),
+
+        layers.Flatten(),
+        layers.Dense(128, activation="relu"),
+        layers.Dense(1, activation="sigmoid")
+    ])
+
+    model.load_weights(WEIGHTS_PATH)
     return model
 
 
-model = load_crack_model()
+model = build_model()
 
-uploaded_file = st.file_uploader(
-    "📷 Upload an image",
-    type=["jpg", "jpeg", "png"]
-)
+# -------- UPLOAD IMAGE -------- #
+uploaded_file = st.file_uploader("📷 Upload an image", type=["jpg","jpeg","png"])
 
-if uploaded_file is not None:
-
-    img = load_img(uploaded_file, target_size=(150, 150))
+if uploaded_file:
+    img = load_img(uploaded_file, target_size=(150,150))
     st.image(img, caption="Uploaded Image", use_column_width=True)
 
     img_array = img_to_array(img) / 255.0
@@ -47,9 +59,9 @@ if uploaded_file is not None:
 
     pred = model.predict(img_array)[0][0]
 
-    st.write(f"🔍 Confidence Score: `{pred:.2f}`")
+    st.write(f"🔍 Confidence: `{pred:.2f}`")
 
     if pred > 0.5:
-        st.error("⚠️ Crack Detected!")
+        st.error("⚠️ Crack Detected")
     else:
-        st.success("✅ No Crack Detected!")
+        st.success("✅ No Crack Detected")
