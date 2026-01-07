@@ -7,6 +7,13 @@ import os
 import gdown
 from tensorflow.keras.models import load_model
 from fpdf import FPDF
+import warnings
+
+# -------------------------
+# Ignore TensorFlow compile warning
+# -------------------------
+warnings.filterwarnings("ignore", category=UserWarning)
+st.set_option('deprecation.showfileUploaderEncoding', False)
 
 # -------------------------
 # Streamlit UI setup
@@ -28,7 +35,8 @@ if not os.path.exists(MODEL_PATH):
         gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
 # Load the trained model
-model = load_model(MODEL_PATH)
+with st.spinner("🔄 Loading model..."):
+    model = load_model(MODEL_PATH, compile=False)  # compile=False avoids the warning
 
 # -------------------------
 # 2️⃣ Functions
@@ -60,4 +68,47 @@ def create_pdf_report(image_path, severity_score, report_path="report.pdf"):
 def predict_crack(image_path):
     """Use the trained model to predict crack presence."""
     img = Image.open(image_path).convert("RGB")
-    img = img.resize((224, 224)
+    img = img.resize((224, 224))  # Adjust to your model's input size
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    pred = model.predict(img_array)
+    return pred[0][0]  # Assumes binary classification
+
+
+# -------------------------
+# 3️⃣ Streamlit main app
+# -------------------------
+uploaded_file = st.file_uploader("Choose an image", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+
+    # Save temporary file
+    temp_path = "temp_image.png"
+    image.save(temp_path)
+
+    # Predict crack
+    with st.spinner("🔍 Detecting cracks..."):
+        prediction = predict_crack(temp_path)
+
+    if prediction >= 0.5:
+        st.error("⚠️ Crack Detected")
+    else:
+        st.success("✅ No Crack Detected")
+
+    # Severity score
+    severity = calculate_crack_severity(temp_path)
+    st.metric(label="Crack Severity Score", value=f"{severity}%")
+
+    # Download report
+    report_file = create_pdf_report(temp_path, severity)
+    with open(report_file, "rb") as f:
+        st.download_button(
+            label="📄 Download Report",
+            data=f,
+            file_name="Crack_Report.pdf",
+            mime="application/pdf",
+        )
+
+    st.success("Analysis complete!")
