@@ -12,45 +12,52 @@ st.set_page_config(
 )
 
 st.title("🧠 Concrete Crack Detection")
+st.write("Upload an image to detect concrete cracks using AI.")
 
-# ---------------- MODEL CONFIG ---------------- #
-MODEL_FILE_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"
+# ---------------- MODEL DETAILS ---------------- #
+MODEL_ID = "1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"
+DOWNLOAD_URL = f"https://drive.google.com/uc?id={MODEL_ID}"
 MODEL_PATH = "crack_model.h5"
-DOWNLOAD_URL = f"https://drive.google.com/uc?id={MODEL_FILE_ID}"
 
-# ---------------- DOWNLOAD MODEL ---------------- #
+# ---------------- LOAD MODEL ---------------- #
 @st.cache_resource
 def load_crack_model():
     if not os.path.exists(MODEL_PATH):
         with st.spinner("⬇️ Downloading model from Google Drive..."):
-            gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+            gdown.download(
+                url=DOWNLOAD_URL,
+                output=MODEL_PATH,
+                quiet=False,
+                fuzzy=True
+            )
             st.success("📦 Model downloaded successfully!")
 
-    return tf.keras.models.load_model(MODEL_PATH)
+    model = tf.keras.models.load_model(MODEL_PATH)
+    return model
 
 model = load_crack_model()
 
-# ---------------- FILE UPLOAD ---------------- #
+# ---------------- IMAGE UPLOAD ---------------- #
 uploaded_file = st.file_uploader(
-    "Upload a concrete surface image",
+    "📷 Upload a crack image",
     type=["jpg", "jpeg", "png"]
 )
 
+# ---------------- PREDICTION ---------------- #
 if uploaded_file is not None:
-    # Load & preprocess image
+
     img = load_img(uploaded_file, target_size=(150, 150))
-    st.image(img, caption="Uploaded Image", use_container_width=True)
+    st.image(img, caption="Uploaded Image", use_column_width=True)
 
     img_array = img_to_array(img)
     img_array = img_array / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
-    # Prediction
     prediction = model.predict(img_array)[0][0]
 
-    st.write(f"🔍 Prediction confidence: **{prediction:.2f}**")
+    st.write(f"🔍 Confidence Score: `{prediction:.2f}`")
 
     if prediction > 0.5:
-        st.error("⚠ Crack Detected!")
+        st.error("⚠️ Crack Detected!")
     else:
-        st.success("✔ No Crack Detected!")
+        st.success("✅ No Crack Detected!")
