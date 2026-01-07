@@ -1,5 +1,7 @@
 streamlit
-tensorflow==2.12.0
-gdown
+tensorflow
+opencv-python-headless
+pillow
 numpy
-Pillow
+fpdf
+gdown
