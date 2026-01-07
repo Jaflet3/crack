@@ -4,25 +4,30 @@ from PIL import Image
 import numpy as np
 import cv2
 import os
+import gdown
 from tensorflow.keras.models import load_model
 from fpdf import FPDF
-import gdown
 
+# -------------------------
+# Streamlit UI setup
+# -------------------------
 st.set_page_config(page_title="🛠️ Crack Detection", layout="centered")
 st.title("🛠️ Image-based Crack Detection")
-st.markdown("Upload an image to detect cracks, calculate severity, and download a report.")
+st.markdown(
+    "Upload an image to detect cracks, calculate severity, and download a report."
+)
 
 # -------------------------
 # 1️⃣ Download model from Google Drive
 # -------------------------
-MODEL_URL = "https://drive.google.com/uc?id=YOUR_FILE_ID"  # replace with your file ID
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1nz82zuEBc0y5rcj9X7Uh5YDvv05VkZuc"
 MODEL_PATH = "model.h5"
 
 if not os.path.exists(MODEL_PATH):
-    with st.spinner("Downloading model..."):
+    with st.spinner("📥 Downloading model..."):
         gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
-# Load model
+# Load the trained model
 model = load_model(MODEL_PATH)
 
 # -------------------------
@@ -37,7 +42,9 @@ def calculate_crack_severity(image_path):
     severity_score = (crack_pixels / total_pixels) * 100
     return round(severity_score, 2)
 
+
 def create_pdf_report(image_path, severity_score, report_path="report.pdf"):
+    """Generate a PDF report with the image and severity score."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=16)
@@ -49,49 +56,8 @@ def create_pdf_report(image_path, severity_score, report_path="report.pdf"):
     pdf.output(report_path)
     return report_path
 
+
 def predict_crack(image_path):
-    """Use the trained model to predict cracks."""
+    """Use the trained model to predict crack presence."""
     img = Image.open(image_path).convert("RGB")
-    img = img.resize((224, 224))  # adjust according to your model input
-    img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    pred = model.predict(img_array)
-    return pred[0][0]  # assuming binary classification
-
-# -------------------------
-# 3️⃣ Streamlit UI
-# -------------------------
-uploaded_file = st.file_uploader("Choose an image", type=["jpg", "png", "jpeg"])
-
-if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
-    
-    # Save temp file
-    temp_path = "temp_image.png"
-    image.save(temp_path)
-    
-    # Predict crack
-    with st.spinner("Detecting cracks..."):
-        prediction = predict_crack(temp_path)
-    
-    if prediction >= 0.5:
-        st.error("⚠️ Crack Detected")
-    else:
-        st.success("✅ No Crack Detected")
-    
-    # Severity
-    severity = calculate_crack_severity(temp_path)
-    st.metric(label="Crack Severity Score", value=f"{severity}%")
-    
-    # Download report
-    report_file = create_pdf_report(temp_path, severity)
-    with open(report_file, "rb") as f:
-        st.download_button(
-            label="📄 Download Report",
-            data=f,
-            file_name="Crack_Report.pdf",
-            mime="application/pdf"
-        )
-    
-    st.success("Analysis complete!")
+    img = img.resize((224, 224)
